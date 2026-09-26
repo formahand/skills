@@ -25,9 +25,7 @@ Formahand is a hosted store platform. A merchant's store has a storefront (a the
 ```toml
 [mcp_servers.formahand]
 url = "https://formahand.com/mcp"
-
-[mcp_servers.formahand.http_headers]
-Authorization = "Bearer <token>"
+bearer_token_env_var = "FORMAHAND_KEY"
 ```
 
 - Any MCP client: `{ "mcpServers": { "formahand": { "type": "http", "url": "https://formahand.com/mcp", "headers": { "Authorization": "Bearer <token>" } } } }`

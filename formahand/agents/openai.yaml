@@ -1,0 +1,15 @@
+interface:
+  display_name: "Formahand"
+  short_description: "Set up, design and run a Formahand store"
+  default_prompt: "Use the formahand skill to work on my Formahand store."
+
+policy:
+  allow_implicit_invocation: true
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "formahand"
+      description: "Formahand store tools (needs a store API token in FORMAHAND_KEY)"
+      transport: "streamable_http"
+      url: "https://formahand.com/mcp"
