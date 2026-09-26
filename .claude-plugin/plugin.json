@@ -1,0 +1,22 @@
+{
+  "name": "formahand",
+  "description": "Skills for working with Formahand stores: setting a store up, designing its storefront, catalog and orders, apps and store functions, integrations and events, environments and the money rules that stay with the merchant.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Formahand",
+    "email": "support@formahand.com"
+  },
+  "homepage": "https://formahand.com",
+  "repository": "https://github.com/formahand/skills",
+  "license": "MIT",
+  "keywords": [
+    "formahand",
+    "ecommerce",
+    "storefront",
+    "mcp",
+    "agent-skills"
+  ],
+  "skills": [
+    "./formahand/"
+  ]
+}
