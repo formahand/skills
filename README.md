@@ -9,8 +9,10 @@ This folder is generated from the Formahand platform (its tool registry and its 
 | Skill | Description |
 | --- | --- |
 | [formahand](./formahand) | Work with a Formahand store through its MCP tools and API. Use when working with a Formahand store: set up, design the storefront, products, shipping, payments readiness, apps, store functions, integrations, events, webhooks, environments, money. Covers the first calls of every session, the draft to publish loop, the walls and money decisions that stay with the merchant, and which reference to read for each task. |
+| [reference-storefront-theme](./reference-storefront-theme) | Use a live website, screenshot, or URL as inspiration to design and build a merchant-editable Formahand storefront theme. Covers reference discovery, capability checks, safe asset use, Formahand sections and behaviors, and evidence-based verification. |
 
 The same content is served at https://formahand.com/skills/formahand/SKILL.md, with its references under `https://formahand.com/skills/formahand/references/` and an index at https://formahand.com/skills.
+The reference-theme workflow is included in this repository for agents to install when they need it.
 
 ## Installation
 
@@ -20,6 +22,12 @@ Every client gets the same skill; only the way it is installed differs.
 
 ```bash
 npx skills add formahand/skills --skill formahand
+```
+
+For reference-inspired storefront work, also install the companion skill:
+
+```bash
+npx skills add formahand/skills --skill reference-storefront-theme
 ```
 
 Add `-g` to install it for every project rather than the current one. When the CLI asks which agents to install for, pick yours (Claude Code, Codex, Cursor and others are supported).

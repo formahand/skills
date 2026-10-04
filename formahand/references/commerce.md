@@ -21,11 +21,11 @@ An agent with `products:write`, `settings:write`, `storefront:write` and `storef
 
 ## Catalog
 
-`upsert_product` (full product each time; `slug` is the identity; up to 3 options and 100 variants) then `set_product_image` (primary, gallery or variant); `upsert_collection` (manual `productIds` or tag rules) then `set_collection_image`. Images come from an https URL or inline base64 (`upload_image` keeps one for later) and are served from the store's own hostname.
+`upsert_product` (full product each time; `slug` is the identity; up to 3 options and 100 variants) then `set_product_image` (primary, gallery or variant); `upsert_collection` (manual `productIds` or tag rules) then `set_collection_image`. Images come from an https URL or inline base64 (`upload_image` keeps one for later).
 
 Content pages and header/footer links are draft edits (`set_content_pages`, `set_navigation`); store-wide SEO is live (`set_seo`).
 
-Custom fields (`set_custom_fields`, namespaced `supplier.order_id`-style keys on products, variants, collections, orders, lines and customers) hold anything else the store needs and appear in views and events. Products have a `kind` (physical, digital with signed 72-hour download links, service) and a backorder flag. Pricing, shipping and payment rules are data evaluated at checkout (`upsert_pricing_rule`, `upsert_checkout_rule`, customer groups); check one with `simulate_checkout` first.
+Custom fields (`set_custom_fields`, namespaced keys like `supplier.order_id` on any object) hold anything else the store needs and appear in views and events. Products have a `kind` (physical, digital with expiring download links, service) and a backorder flag. Pricing, shipping and payment rules are checkout data (`upsert_pricing_rule`, `upsert_checkout_rule`, customer groups); check one with `simulate_checkout` first. Missing a feature (free gifts, bundles, personal codes)? Build it as store code: `describe_store_functions`.
 
 ## Shipping
 
@@ -79,15 +79,15 @@ Carrier, tracking and the buyer's shipping email belong to the whole order (one 
 
 ### Refund limits for agents
 
-Refunds are the one order action that moves money out, so besides the `orders:refund` scope there is a ceiling the owner sets in **Settings → Agents & API**: the most one refund may be, and the most all of a store's tokens may refund in a day (UTC, counted across every token and per environment). A merchant refunding in the dashboard has no limit and never uses up the agents' allowance.
+Refunds are the one order action that moves money out, so besides the `orders:refund` scope there is a ceiling the owner sets in **Settings → Agents & API → Guardrails** (`#settings/agents/guardrails`): the most one refund may be, and the most all of a store's tokens may refund in a day (UTC, counted across every token and per environment). A merchant refunding in the dashboard has no limit and never uses up the agents' allowance.
 
 Over either limit the refund is refused with **409** and the usual wall body, so an agent can hand the merchant the link instead of retrying or splitting the refund into smaller ones:
 
 ```json
 { "error": "An agent can refund at most <limit> on one order. …",
   "wall": true, "feature": "refunds", "reason": "limit",
-  "steps": [{ "id": "dashboard", "label": "Refund this order from the dashboard", "done": false, "href": "/dashboard#orders" },
-            { "id": "limit", "label": "Raise the agent refund limit", "done": false, "href": "/dashboard#settings/agents" }],
+  "steps": [{ "id": "dashboard", "label": "Refund this order from the dashboard", "done": false, "href": "/dashboard#orders/ord_…" },
+            { "id": "limit", "label": "Raise the agent refund limit", "done": false, "href": "/dashboard#settings/agents/guardrails" }],
   "usage": { "used": …, "limit": … } }
 ```
 
@@ -126,7 +126,7 @@ A buyer who wants one more of something, or a different address, does not need t
 | `waive` | `waive_order_edit_balance` | Closes an unpaid difference, forgiven, or collected another way |
 | `list` | `list_order_edits` | The audit trail: who, before, after, the difference, how it settled |
 
-**Always preview before you apply.** `consequence.sentence` is the one line a merchant would read, "Buyer owes 12.40 USD, we'll email a payment link", or "Refund 8.00 USD to the buyer's card", and `problems` lists everything that would refuse the edit (stock, an address the store does not ship to, a discount code that does not apply). An edit that costs a customer more money is not a thing to discover afterwards.
+**Always preview before you apply.** `consequence.sentence` is the one line a merchant would read, "Buyer owes 12.40 USD. We'll email a payment link", or "Refund 8.00 USD to the buyer's card", and `problems` lists everything that would refuse the edit (stock, an address the store does not ship to, a discount code that does not apply). An edit that costs a customer more money is not a thing to discover afterwards.
 
 **What an agent may not do.**
 
@@ -176,6 +176,8 @@ Both rule kinds share one condition grammar: `minSubtotalMinor`, `minQuantity`, 
 
 A discount never takes a line below zero, nor below the line's `supplier.cost` custom field when the store keeps one, and each line's discount is rounded to a whole number of minor units per unit in the shopper's favour, so the cart, the payment session and the order all carry the same integer price. The order records what applied, and the thank-you page shows it.
 
+**When there is no feature for it, build it as store code.** A free gift with purchase, a bundle, a quantity break, a personal code after purchase, a loyalty discount, a progress bar: a [store function](https://formahand.com/docs/store-functions) decides (`cart.transform` adds lines, `cart.price` prices them and shows offers, `order.event` makes a code and mails it), an [app](https://formahand.com/docs/apps) keeps records and routes, and a storefront interaction presents it. For new agent-authored interactions, use section [behavior](https://formahand.com/docs/section-behaviors) and only the bounded APIs it exposes. Existing owner-authored [legacy section scripts](https://formahand.com/docs/section-scripts) remain a more powerful same-origin option; they are not the safe agent behavior API. The platform clamps every function answer: store code names products and quantities, never prices. Worked examples include a free gift ([store functions](https://formahand.com/docs/store-functions)), a sign-up popup and spend-progress bar ([legacy section scripts](https://formahand.com/docs/section-scripts), §9b); `describe_store_functions` carries the free-gift function. Without code, a cart page body section places `{% widget "offers" %}`, `{% widget "progress" %}` and `{% widget "quick-add" product: settings.gift %}`, or draws from `offers` and `cart.progress` (`describe_sections { parts: ["cart-page"] }`). On the order confirmation page, a `thankyou.content` function shows up to three offers. Section interactions run only where enabled and not on protected checkout/account pages. An app granted `shopper:identify` may know the signed-in shopper at its own route; only the documented legacy script API can call it with `api.shopper.fromApp(name, path)` today. The daily code limits (2,000 per store, 200 per function, 500 per flow or app, 1,000 per token or person) are defaults: `set_code_limits` (settings:write) raises or lowers them up to 50,000 a day, and `list_discounts` shows the limits in force.
+
 **Check before you enable.** `simulate_checkout { items, customerEmail?, destinationCountry? }` (`settings:read`; naming a customer also needs `customers:read`) runs the engine over a hypothetical cart and answers with the priced lines, the rules that would apply, and the shipping and payment options. It creates no order, holds no stock and counts no usage. Never switch a rule on without simulating the cart it is meant for and one it is not.
 
 Conditions that name the shopper, `customerGroup`, `customerTag`, `firstOrder`, only hold for a shopper signed in to the store.
@@ -193,11 +195,12 @@ Conditions that name the shopper, `customerGroup`, `customerTag`, `firstOrder`, 
 | `set_product_image` | `products:write` | Give a product a photo and attach it. |
 | `set_collection_image` | `products:write` | Give a collection its cover image: { collectionId, url \| dataBase64 + contentType }. |
 | `upload_image` | `products:write` | Store an image in the store's own media library without attaching it, for use anywhere an https image URL is accepted (upsert_product imageUrl/images, upsert_collection imageUrl, set-hero-image, content pages): { url \| dataBase64 + contentType, alt? }. |
+| `upload_section_video` | `products:write` | Store one MP4 or WebM video in this environment's own media library: { dataBase64, contentType }. |
 | `delete_product` | `products:write` | Delete one product for good: { id \| slug } → { deleted: { id, slug, name } }. |
 | `bulk_products` | `products:write` | The dashboard's bulk bar for a token: { ids: string[], action: 'archive' \| 'activate' \| 'delete' } → { updated, deleted, skipped }. |
 | `export_products` | `products:read` | The catalog as CSV text: { format, filename, csv, rows, products, total, truncated, columns, note }. |
 | `import_products` | `products:write` | Import a product CSV, the same parser the dashboard's migration wizard uses: { csv, dryRun?, onExistingHandle?, removeMissingVariants? } → { mode, rows, outcomes: [{ handle, rows, action: 'create' \| 'update' \| 'skip', reason?, warnings, changes?,… |
-| `list_media` | `products:read` | Every image in the store's own media library: { media: [{ key, url, bytes, contentType, uploadedAt, inUse, usedBy }], nextCursor, totalBytes }. |
+| `list_media` | `products:read` | Every image, video and licensed font in the store's own media library: { media: [{ key, url, bytes, contentType, uploadedAt, inUse, usedBy, fontValue? }], nextCursor, totalBytes }. |
 | `delete_media` | `products:write` | Delete one image from the store's bucket: { key, force? } → { deleted: { key, bytes, usedBy } }. |
 | `list_product_files` | `products:read` | The files a digital product delivers: { files: [{ id, name, bytes, contentType }] }, newest last. |
 | `upload_product_file` | `products:write` | Attach a file to a digital product (its kind must be digital) and store it in the store's own media library: { productId, url \| dataBase64 + contentType, name? }. |
@@ -207,8 +210,8 @@ Conditions that name the shopper, `customerGroup`, `customerTag`, `firstOrder`, 
 | `set_custom_fields` | `products:write` | Write custom fields on one object. |
 | `delete_custom_field` | `products:write` | Remove one custom field by namespace and key. |
 | `describe_custom_fields` | `products:read` | What custom fields are and how to use them: the six owner types, the seven value types (text, number, money, date, boolean, json, file) with their shapes and limits, the namespace and key rules, how merging works, which scopes each owner type needs,… |
-| `get_seo` | `storefront:read` | Store-wide SEO settings: { seo: { title, metaDescription, socialTitle, socialDescription, noindex } } (seo is null until set). |
-| `set_seo` | `storefront:write` | Replace the store-wide SEO settings: title (<=60), metaDescription (<=160), socialTitle (<=70), socialDescription (<=200), noindex. |
+| `get_seo` | `storefront:read` | Store-wide SEO settings: { seo: { title, metaDescription, socialTitle, socialDescription, noindex, aiAssistants } } (seo is null until set; aiAssistants is 1 when AI assistants may read the store, the default). |
+| `set_seo` | `storefront:write` | Replace the store-wide SEO settings: title (<=60), metaDescription (<=160), socialTitle (<=70), socialDescription (<=200), noindex, and aiAssistants (false refuses AI crawlers in robots.txt and hides /llms.txt; absent keeps the current value). |
 | `list_seo_overrides` | `storefront:read` | Every per-object SEO override the store has set: { overrides: [{ ownerType, ownerId, title, metaDescription, canonical, noindex, ogImageUrl, url, updatedAt }] }. |
 | `list_redirects` | `storefront:read` | The store's path redirects: { redirects: [{ id, fromPath, toPath, status, hits, createdAt }] }. |
 | `set_redirect` | `storefront:write` | Send one address somewhere else: { fromPath, toPath, status?: 301 \| 302 } (301 by default). |
@@ -217,6 +220,11 @@ Conditions that name the shopper, `customerGroup`, `customerTag`, `firstOrder`, 
 | `upsert_post` | `storefront:write` | Write or rewrite a post: { id?, slug, title, excerpt?, bodyMarkdown?, coverImageUrl?, author?, tags?, status?: 'draft' \| 'published' }. |
 | `delete_post` | `storefront:write` | Remove a post: { id }. |
 | `set_post_image` | `storefront:write` | Give a post its cover image: { postId, url \| dataBase64 + contentType }. |
+| `get_seo_audit` | `storefront:read` | Checks the store for search problems and changes nothing: missing, duplicate, too long or too short titles and descriptions, pages with no main heading or several, products with no image, images with no description or over 500 KB, product… |
+| `get_seo_insights` | `orders:read` | The store's SEO insights, one part at a time: { part?: "summary" \| "topics" \| "improve" \| "add" \| "titles" \| "duplicates" \| "remove" \| "answers" \| "apply", offset?, limit? }. |
+| `list_tracked_links` | `storefront:read` | The store's tracked links, newest first: { links: [{ id, code, name, targetPath, source, medium, campaign, discountCode, active, createdByKind, createdBy, createdAt, updatedAt, clicks, clicksLast30Days, orders, revenueMinor, url }], total, offset,… |
+| `upsert_tracked_link` | `storefront:write` | Make or change one tracked link: { id?, code?, name, targetPath, channel?, source?, medium?, campaign?, discountCode?, active? } → { link }. |
+| `delete_tracked_link` | `storefront:write` | Remove one tracked link: { id } or { code } → { deleted, id, code }. |
 | `list_orders` | `orders:read` | Orders, newest first, with payment and fulfillment status, tags and items: { orders, limit, nextCursor }. |
 | `get_order` | `orders:read` | One order with its items, shipping address, tags and timeline. |
 | `fulfill_order` | `orders:write` | Mark an order fulfilled with optional carrier and tracking details, and optionally email the shipping confirmation to the customer. |
@@ -288,10 +296,13 @@ Conditions that name the shopper, `customerGroup`, `customerTag`, `firstOrder`, 
 | `get_analytics` | `orders:read` | Everything the store knows about a period: { from?, to?, compare? } → { period, currency, revenueMinor, taxCollectedMinor, orders, paidOrders, averageOrderMinor, refundedMinor, abandonedCheckouts, abandonedRate, newCustomers, repeatRate,… |
 | `get_top_products` | `orders:read` | What sold most: { period: "7d" \| "30d" \| "90d" \| "365d" } → { period, currency, bestSellers: [{ productId, name, quantity, revenueMinor }], paidOrders, revenueMinor }. |
 | `export_analytics` | `orders:read` | A period's numbers as CSV text: { period: "7d" \| "30d" \| "90d" \| "365d" } → { format, filename, csv, rows, period, currency }. |
-| `import_search_performance` | `settings:write` | Upload search performance rows the owner exported themselves: { rows: [{ day, query, page, clicks, impressions, position }], source? } → { imported: { rows, days, from, to, source } }. |
-| `get_search_performance` | `orders:read` | What the uploaded search rows say: { from, to, groupBy: "query" \| "page", limit? } → { period, groupBy, rows: [{ key, clicks, impressions, ctr, position }], totals }. |
-| `get_feeds` | `settings:read` | Where this store publishes itself for shopping engines and AI agents: { } → { hostname, feeds: { google, csv, json }, llmsTxt, wellKnown, mcp, docs, summary: { items, inStock, outOfStock, backorder, problemCount, ok, checkedAt } }. |
-| `check_feed` | `settings:read` | Fetch this store's published product feed and report on it: { } → { ok, hostname, feeds, items, inStock, outOfStock, backorder, problems: [{ id, title, field, message }], problemCount, checkedAt, error? }. |
+| `import_search_performance` | `settings:write` | Upload search performance rows the owner exported themselves: { rows: [{ day, query, page, clicks, impressions, position, engine?, country?, device? }], source? } → { imported: { rows, days, from, to, source } }. |
+| `get_search_performance` | `orders:read` | What search performance says for a period: { from, to, groupBy?: "query" \| "page" \| "engine" \| "country" \| "device" \| "day", engine?: "google" \| "bing" \| "other", country?, device?: "desktop" \| "mobile" \| "tablet", limit? } → { period, groupBy,… |
+| `get_order_sources` | `orders:read` | Where sales came from: channel, source, campaign and tracked link, with orders and sales for a period. |
+| `describe_search_engines` | `settings:read` | Which search engines this store is connected to, read-only: {} → { mode, primaryHostname, engines: [{ engine, available, state, way, hostname, lastReadAt, lastError, readAccess, identities? }], requests: [{ id, engine, hostname, requestedBy,… |
+| `connect_search_engine` | `settings:write` | Asks the owner to connect a search engine: { engine: "google" \| "bing" \| "indexnow" } → { request: { id, engine, hostname, state: "waiting_for_owner" }, approveAt, next }. |
+| `get_feeds` | `settings:read` | Where this store publishes itself for shopping engines and AI agents: { } → { hostname, feeds: { google, csv, json }, channelFeeds: { meta, pinterest, tiktok }, llmsTxt, wellKnown, mcp, docs, summary: { items, inStock, outOfStock, backorder,… |
+| `check_feed` | `settings:read` | Fetch this store's published product feed and report on it: { channel?: "google" \| "meta" \| "pinterest" \| "tiktok" } → { ok, hostname, feeds, items, inStock, outOfStock, backorder, problems: [{ id, title, field, message }], problemCount, checkedAt, error? }. |
 
 ## Read more
 

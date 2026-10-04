@@ -169,6 +169,9 @@ A flow:
 | `wake_agent` | `url`, `bearer?` | POSTs a CloudEvents batch of one with `Authorization: Bearer` like an agent subscription | none |
 | `set_order_status` | `status: "cancelled"` | Cancels the order exactly as the dashboard does (inventory released, `order.cancelled` recorded) | the order is not `pending` + `unfulfilled` (that 409 is a skip, not a failure) |
 | `wait` | `minutes` (1–10 080) | Holds the run and lets the steps after it carry on later; an order's `data` is re-read when it resumes | `when` is false |
+| `issue_code` | `template` (a discount code kept as a template), `expiresInDays?` (1–365), `bindToCustomer?` | Makes one single-use code from the template ([checkout rules](https://formahand.com/docs/checkout-rules) "Codes made from a template"). Every action after it reads it as `{{ issued.code }}`, with `{{ issued.link }}` a link that applies it and `{{ issued.expiresAt }}`; the code is kept on the step's result, so it survives a wait or a retry. With `bindToCustomer`, only the event's customer can use it | `bindToCustomer` and the event names no customer email; a day's code limit reached is a failure |
+
+A personal code after purchase is two steps: `{ "type": "issue_code", "template": "COMEBACK", "expiresInDays": 30, "bindToCustomer": true }` then `{ "type": "send_email", "template": "come-back", "to": "buyer" }`, with `{{ issued.code }}` in the template. The same on `customer.created` gives every new customer a welcome code of their own.
 
 `to` and `cc` accept, comma-separated: `buyer` (`data.customerEmail`, else `data.email`), `merchant` (the store owner's address), a literal address, or a template such as `{{ data.customerEmail }}`; anything that does not render to an address is reported in the skip detail. Secrets (`secret`, `bearer`) are stored with the flow like a subscription's target, shown as `secretSet` / `bearerSet` in every view and event, and kept when an update omits them for an action of the same type at the same position.
 
@@ -274,7 +277,7 @@ A flow that cannot work should never be switched on to fail quietly at three in 
   "requirements": [
     { "id": "email-sender", "label": "An address the store's email is sent from", "done": false,
       "detail": "Verify your own sending address under Email → Sending settings; until then this store sends no email at all.",
-      "href": "/dashboard#settings/email", "blocking": true },
+      "href": "/dashboard#settings/email/domain", "blocking": true },
     { "id": "template:order-shipped", "label": "The email template \"order-shipped\"", "done": true, … },
     { "id": "shipping-mode", "label": "A shipping setup that reports parcels", "done": false, "blocking": false, … } ] }
 ```
@@ -283,12 +286,12 @@ A flow that cannot work should never be switched on to fail quietly at three in 
 
 | Requirement | Blocking | Done when | Fixed by |
 | --- | --- | --- | --- |
-| `email-sender` (any `send_email` / `notify_merchant`) | yes | your store has a verified sending address of its own | Email → Sending settings (yours to do; no tool) |
+| `email-sender` (any `send_email` / `notify_merchant`) | yes | your store has a verified sending address of its own | Email → Sending settings → Email domain, `#settings/email/domain` (yours to do; no tool) |
 | `merchant-address` (`notify_merchant`, `to: merchant`) | yes | Formahand knows the owner's address | none |
-| `template:<key>` (per `send_email`) | yes | a template with that key exists | Automations → Transactional templates; `upsert_email_template` |
-| `secret:<name>` (any `{{ secrets.* }}`) | yes | the vault holds that name | Settings → Agents & API; `set_secret` |
+| `template:<key>` (per `send_email`) | yes | a template with that key exists | Automations → Email templates, `#automations/templates`; `upsert_email_template` |
+| `secret:<name>` (any `{{ secrets.* }}`) | yes | the vault holds that name | Settings → Agents & API → Vault, `#settings/agents/vault`; `set_secret` |
 | `webhook-url:<i>` (`webhook`, `wake_agent`) | yes | the address answered a check, or is built from the event | `check_flow_url` |
-| `inbound-url` (a `hook.received` flow) | yes | the flow has an inbound URL and it is on | Automations → Inbound URLs; `create_flow_hook` |
+| `inbound-url` (a `hook.received` flow) | yes | the flow has an inbound URL and it is on | Automations → Inbound URLs, `#automations/hooks`; `create_flow_hook` |
 | `schedule-missing` (a `schedule.tick` flow with no schedule) | yes | the flow carries a schedule | `update_flow { schedule }` |
 | `customer-target:<i>` (`tag_customer`) | no | the store has customer records | none |
 | `shipping-mode` (`order.fulfilled` / `.delivered` / `.tracking_updated`) | no | a shipping module is active or flat rates exist | Checkout → Shipping; `set_shipping` |
@@ -351,7 +354,11 @@ A flow that cannot work should never be switched on to fail quietly at three in 
 | `get_recipe` | `settings:read` | One recipe in full: { recipe: { id, name, category, description, needs, flows, customFieldDefinitions, subscriptions, notes } }. |
 | `install_recipe` | `settings:write` | Install a recipe into this store: { id, secrets?: { name: value }, options?: { name: value } }. |
 | `uninstall_recipe` | `settings:write` | Remove what a recipe created: { id }. |
-| `list_discounts` | `settings:read` | Discount codes with kind, value, currency, conditions, what they apply to, whether they combine, the window, the store-wide and per-customer limits, status (active \| paused \| ended), usageCount and timesUsed. |
+| `list_discounts` | `settings:read` | Discount codes with kind, value, currency, conditions, what they apply to, whether they combine, the window, the store-wide and per-customer limits, status (active \| paused \| ended), usageCount and timesUsed, and codeLimits (the daily limits on… |
+| `mint_discount_codes` | `discounts:issue` | Make single-use codes from a template discount (upsert_discount { template: true }): { template: id or code, count 1-100, prefix?, expiresInDays? 1-365, email? } → { template, codes: [{ id, code, expiresAt }] }. |
+| `set_gift_exception` | `settings:write` | Let one rule give one product away below its recorded cost, or stop it: { subject: "function:<name>" \| "rule:<pricing rule id>" \| "code:<discount id or template id>", productId, allowed: true\|false } → { giftExceptions }. |
+| `set_code_limits` | `settings:write` | Change the store's daily limits on codes made from a template: { perStore?, perCaller?: { function?, flow?, app?, token?, member? } }, each a whole number 1-50000, null for the default → { codeLimits: { perStore, perCaller, defaults, ceiling, changed } }. |
+| `list_gift_exceptions` | `settings:read` | Which rule, code or store function may give which product away below its recorded cost: [{ id, subject, productId, createdBy, createdAt }]. |
 | `upsert_discount` | `settings:write` | Create or edit a discount code, a named trigger for the same rule engine as upsert_pricing_rule (/docs/checkout-rules): code (3-32 letters/digits), kind 'percent' (value 1-100), 'amount' (value in minor units, currency required), 'free_shipping' or… |
 | `end_discount` | `settings:write` | End a discount code: { id }, it stops working immediately and stays on the list with its redemptions. |
 | `delete_discount` | `settings:write` | Delete a discount code that was never used: { id } → { deleted: true, id, code }. |

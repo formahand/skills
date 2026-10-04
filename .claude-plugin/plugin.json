@@ -1,6 +1,6 @@
 {
   "name": "formahand",
-  "description": "Skills for working with Formahand stores: setting a store up, designing its storefront, catalog and orders, apps and store functions, integrations and events, environments and the money rules that stay with the merchant.",
+  "description": "Skills for working with Formahand stores, including reference-inspired storefront design.",
   "version": "1.0.0",
   "author": {
     "name": "Formahand",
@@ -17,6 +17,7 @@
     "agent-skills"
   ],
   "skills": [
-    "./formahand/"
+    "./formahand/",
+    "./reference-storefront-theme/"
   ]
 }

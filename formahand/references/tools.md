@@ -1,21 +1,21 @@
 # Formahand tools
 
-Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job they do: name, the scope a token needs ("any" means any valid token), what it does, and its top-level input (`?` marks optional). The full description of each tool is in the MCP `tools/list` answer and under `components.schemas` in https://formahand.com/api/openapi.json. Tools that say they act on "the token's environment" work in both live and test; the plan, billing and domain tools are live only.
+Every MCP tool the Formahand endpoint serves (285 of them), grouped by the job they do: name, the scope a token needs ("any" means any valid token), what it does, and its top-level input (`?` marks optional). The full description of each tool is in the MCP `tools/list` answer and under `components.schemas` in https://formahand.com/api/openapi.json. Tools that say they act on "the token's environment" work in both live and test; the plan, billing and domain tools are live only.
 
 ## Orientation
 
 | Tool | Scope | What it does | Input |
 | --- | --- | --- | --- |
-| `get_store` | any | The store this token belongs to: id, name, mode (live \| test: the environment this token acts on), that environment's hostnames, runtime status, active theme preset, the live publication version and whether a sandbox exists. | none |
+| `get_store` | any | The store this token belongs to: id, name, mode (live \| test: the environment this token acts on), that environment's hostnames, runtime status, `theme` { id, name } (the look the draft wears, as list_themes names it; `themePresetId` is the older… | none |
 | `describe_system` | any | How Formahand works, for an agent that has read nothing else: what a store is, live vs test mode and how a token's prefix binds it, the draft → publish loop, catalog/pages/navigation/SEO, shipping modes, payment providers, events → subscriptions →… | `{ sections?: string[] }` |
 | `get_started` | any | The store's current state (mode, runtime status, product count, published?, draft pending?, payments ready?, shipping mode, custom domains, sandbox?, open walls) and an ordered checklist of the next tool calls with argument hints, so an agent can… | none |
 
-## Storefront draft, brand, themes, custom code, history and publishing
+## Storefront draft, brand, custom code, history and publishing
 
 | Tool | Scope | What it does | Input |
 | --- | --- | --- | --- |
 | `list_modules` | `storefront:read` | Discover what the storefront editor can do: the editor commands `apply_storefront_commands` accepts, as a JSON schema, and the storefront modules a section can be built from. | `{ id?: string }` |
-| `get_storefront_draft` | `storefront:read` | The current storefront draft: { draft: { revision, document, publishedRevision }, liveVersion, modules }. | none |
+| `get_storefront_draft` | `storefront:read` | The current storefront draft: { schemaVersion: 3, draft: { revision, document, publishedRevision, updatedAt, updatedBy }, liveVersion, publishedAt, modules }. | none |
 | `apply_storefront_commands` | `storefront:write` | Apply editor commands (see list_modules) to the draft, at most 30 per call. | `{ revision: integer, commands: any[] }` |
 | `publish_storefront` | `storefront:publish` | Publish the draft at this revision so shoppers see it. | `{ revision: integer }` |
 | `set_hero_image` | `storefront:write` | Set the home page hero image of the storefront draft: { revision, url \| dataBase64 + contentType }. | `{ revision: integer, url?: string, dataBase64?: string, contentType?: "image/jpeg" \| "image/png" \| "image/webp" }` |
@@ -27,7 +27,6 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `set_custom_block` | `storefront:write` | Adds, changes or removes one custom HTML block in the draft: { revision, id?, html?, css?, position?, sectionId?, placement?, pageSlug?, width?, visible?, remove? }. | `{ revision: integer, id?: string, html?: string, css?: string, position?: object, sectionId?: "hero" \| "collection" \| "more-products" \| "styles", placement?: "before" \| "after", pageSlug?: string, width?: "content" \| "full", visible?: boolean, remove?: boolean }` |
 | `set_theme_css` | `storefront:write` | Replaces the store's own stylesheet in the draft: { revision, css }. | `{ revision: integer, css: string }` |
 | `set_script_embeds` | `storefront:write` | Replaces the store's script embeds in the draft: { revision, embeds: [{ provider, id, enabled? }] }. | `{ revision: integer, embeds: object[] }` |
-| `list_themes` | `storefront:read` | The storefront themes a store can wear: { themes: [{ id, name, description, categories, cover, settings, content }] }. | none |
 | `list_storefront_versions` | `storefront:read` | What the storefront looked like before: { versions: [{ id, at, actor, kind, revision, sections, pages, changed, summary }], hasMore }. | `{ limit?: integer }` |
 | `restore_storefront_version` | `storefront:write` | Put an old version back as the current DRAFT: { id } (from list_storefront_versions) → { restored, draft: { revision, document, publishedRevision }, published: false, dangling }. | `{ id: string }` |
 
@@ -44,11 +43,12 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `set_product_image` | `products:write` | Give a product a photo and attach it. | `{ productId: string, slot?: "primary" \| "gallery" \| object, alt?: string, url?: string, dataBase64?: string, contentType?: "image/jpeg" \| "image/png" \| "image/webp" }` |
 | `set_collection_image` | `products:write` | Give a collection its cover image: { collectionId, url \| dataBase64 + contentType }. | `{ collectionId: string, url?: string, dataBase64?: string, contentType?: "image/jpeg" \| "image/png" \| "image/webp" }` |
 | `upload_image` | `products:write` | Store an image in the store's own media library without attaching it, for use anywhere an https image URL is accepted (upsert_product imageUrl/images, upsert_collection imageUrl, set-hero-image, content pages): { url \| dataBase64 + contentType, alt? }. | `{ alt?: string, url?: string, dataBase64?: string, contentType?: "image/jpeg" \| "image/png" \| "image/webp" }` |
+| `upload_section_video` | `products:write` | Store one MP4 or WebM video in this environment's own media library: { dataBase64, contentType }. | `{ dataBase64: string, contentType: "video/mp4" \| "video/webm" }` |
 | `delete_product` | `products:write` | Delete one product for good: { id \| slug } → { deleted: { id, slug, name } }. | `{ id?: string, slug?: string }` |
 | `bulk_products` | `products:write` | The dashboard's bulk bar for a token: { ids: string[], action: 'archive' \| 'activate' \| 'delete' } → { updated, deleted, skipped }. | `{ ids: string[], action: "archive" \| "activate" \| "delete" }` |
 | `export_products` | `products:read` | The catalog as CSV text: { format, filename, csv, rows, products, total, truncated, columns, note }. | `{ format?: "csv", status?: "all" \| "active" \| "archived" }` |
 | `import_products` | `products:write` | Import a product CSV, the same parser the dashboard's migration wizard uses: { csv, dryRun?, onExistingHandle?, removeMissingVariants? } → { mode, rows, outcomes: [{ handle, rows, action: 'create' \| 'update' \| 'skip', reason?, warnings, changes?,… | `{ csv: string, dryRun?: boolean, onExistingHandle?: "skip" \| "update", removeMissingVariants?: boolean }` |
-| `list_media` | `products:read` | Every image in the store's own media library: { media: [{ key, url, bytes, contentType, uploadedAt, inUse, usedBy }], nextCursor, totalBytes }. | `{ limit?: integer, cursor?: string, orphansOnly?: boolean }` |
+| `list_media` | `products:read` | Every image, video and licensed font in the store's own media library: { media: [{ key, url, bytes, contentType, uploadedAt, inUse, usedBy, fontValue? }], nextCursor, totalBytes }. | `{ limit?: integer, cursor?: string, orphansOnly?: boolean }` |
 | `delete_media` | `products:write` | Delete one image from the store's bucket: { key, force? } → { deleted: { key, bytes, usedBy } }. | `{ key: string, force?: boolean }` |
 
 ## Orders
@@ -88,8 +88,8 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 
 | Tool | Scope | What it does | Input |
 | --- | --- | --- | --- |
-| `get_seo` | `storefront:read` | Store-wide SEO settings: { seo: { title, metaDescription, socialTitle, socialDescription, noindex } } (seo is null until set). | `{ ownerType?: "product" \| "collection" \| "page" \| "post", ownerId?: string }` |
-| `set_seo` | `storefront:write` | Replace the store-wide SEO settings: title (<=60), metaDescription (<=160), socialTitle (<=70), socialDescription (<=200), noindex. | `{ ownerType?: "product" \| "collection" \| "page" \| "post", ownerId?: string, title?: string, metaDescription?: string, socialTitle?: string, socialDescription?: string, canonical?: "" \| string, ogImageUrl?: "" \| string, noindex?: boolean }` |
+| `get_seo` | `storefront:read` | Store-wide SEO settings: { seo: { title, metaDescription, socialTitle, socialDescription, noindex, aiAssistants } } (seo is null until set; aiAssistants is 1 when AI assistants may read the store, the default). | `{ ownerType?: "product" \| "collection" \| "page" \| "post", ownerId?: string }` |
+| `set_seo` | `storefront:write` | Replace the store-wide SEO settings: title (<=60), metaDescription (<=160), socialTitle (<=70), socialDescription (<=200), noindex, and aiAssistants (false refuses AI crawlers in robots.txt and hides /llms.txt; absent keeps the current value). | `{ ownerType?: "product" \| "collection" \| "page" \| "post", ownerId?: string, title?: string, metaDescription?: string, socialTitle?: string, socialDescription?: string, canonical?: "" \| string, ogImageUrl?: "" \| string, noindex?: boolean, aiAssistants?: boolean }` |
 | `list_seo_overrides` | `storefront:read` | Every per-object SEO override the store has set: { overrides: [{ ownerType, ownerId, title, metaDescription, canonical, noindex, ogImageUrl, url, updatedAt }] }. | none |
 | `list_redirects` | `storefront:read` | The store's path redirects: { redirects: [{ id, fromPath, toPath, status, hits, createdAt }] }. | none |
 | `set_redirect` | `storefront:write` | Send one address somewhere else: { fromPath, toPath, status?: 301 \| 302 } (301 by default). | `{ fromPath: string, toPath: string, status?: 301 \| 302 }` |
@@ -98,13 +98,19 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `upsert_post` | `storefront:write` | Write or rewrite a post: { id?, slug, title, excerpt?, bodyMarkdown?, coverImageUrl?, author?, tags?, status?: 'draft' \| 'published' }. | `{ id?: string, slug: string, title: string, excerpt?: string, bodyMarkdown?: string, coverImageUrl?: "" \| string, author?: string, tags?: string[], status?: "draft" \| "published" }` |
 | `delete_post` | `storefront:write` | Remove a post: { id }. | `{ id: string }` |
 | `set_post_image` | `storefront:write` | Give a post its cover image: { postId, url \| dataBase64 + contentType }. | `{ postId: string, url?: string, dataBase64?: string, contentType?: "image/jpeg" \| "image/png" \| "image/webp" }` |
+| `get_seo_audit` | `storefront:read` | Checks the store for search problems and changes nothing: missing, duplicate, too long or too short titles and descriptions, pages with no main heading or several, products with no image, images with no description or over 500 KB, product… | `{ limit?: integer, severity?: "high" \| "medium" \| "low" }` |
+| `get_seo_insights` | `orders:read` | The store's SEO insights, one part at a time: { part?: "summary" \| "topics" \| "improve" \| "add" \| "titles" \| "duplicates" \| "remove" \| "answers" \| "apply", offset?, limit? }. | `{ part?: enum, offset?: integer, limit?: integer }` |
 
 ## Discounts, integrations and checkout origins
 
 | Tool | Scope | What it does | Input |
 | --- | --- | --- | --- |
-| `list_discounts` | `settings:read` | Discount codes with kind, value, currency, conditions, what they apply to, whether they combine, the window, the store-wide and per-customer limits, status (active \| paused \| ended), usageCount and timesUsed. | none |
-| `upsert_discount` | `settings:write` | Create or edit a discount code, a named trigger for the same rule engine as upsert_pricing_rule (/docs/checkout-rules): code (3-32 letters/digits), kind 'percent' (value 1-100), 'amount' (value in minor units, currency required), 'free_shipping' or… | `{ id?: string, code: string, kind?: "percent" \| "amount" \| "free_shipping" \| "bxgy", value?: integer, currency?: string, conditions?: object, applies?: object, combinable?: boolean, startsAt?: string, expiresAt?: string, maxRedemptions?: integer, perCustomerLimit?: integer, status?: "active" \| "paused" \| "ended" }` |
+| `list_discounts` | `settings:read` | Discount codes with kind, value, currency, conditions, what they apply to, whether they combine, the window, the store-wide and per-customer limits, status (active \| paused \| ended), usageCount and timesUsed, and codeLimits (the daily limits on… | `{ template?: string }` |
+| `mint_discount_codes` | `discounts:issue` | Make single-use codes from a template discount (upsert_discount { template: true }): { template: id or code, count 1-100, prefix?, expiresInDays? 1-365, email? } → { template, codes: [{ id, code, expiresAt }] }. | `{ template: string, count?: integer, prefix?: string, expiresInDays?: integer, email?: string }` |
+| `set_gift_exception` | `settings:write` | Let one rule give one product away below its recorded cost, or stop it: { subject: "function:<name>" \| "rule:<pricing rule id>" \| "code:<discount id or template id>", productId, allowed: true\|false } → { giftExceptions }. | `{ subject: string, productId: string, allowed?: boolean }` |
+| `set_code_limits` | `settings:write` | Change the store's daily limits on codes made from a template: { perStore?, perCaller?: { function?, flow?, app?, token?, member? } }, each a whole number 1-50000, null for the default → { codeLimits: { perStore, perCaller, defaults, ceiling, changed } }. | `{ perStore?: integer, perCaller?: object }` |
+| `list_gift_exceptions` | `settings:read` | Which rule, code or store function may give which product away below its recorded cost: [{ id, subject, productId, createdBy, createdAt }]. | none |
+| `upsert_discount` | `settings:write` | Create or edit a discount code, a named trigger for the same rule engine as upsert_pricing_rule (/docs/checkout-rules): code (3-32 letters/digits), kind 'percent' (value 1-100), 'amount' (value in minor units, currency required), 'free_shipping' or… | `{ id?: string, code: string, kind?: "percent" \| "amount" \| "free_shipping" \| "bxgy", value?: integer, currency?: string, conditions?: object, applies?: object, combinable?: boolean, startsAt?: string, expiresAt?: string, maxRedemptions?: integer, perCustomerLimit?: integer, status?: "active" \| "paused" \| "ended", template?: boolean }` |
 | `end_discount` | `settings:write` | End a discount code: { id }, it stops working immediately and stays on the list with its redemptions. | `{ id: string }` |
 | `delete_discount` | `settings:write` | Delete a discount code that was never used: { id } → { deleted: true, id, code }. | `{ id: string }` |
 | `list_integrations` | `settings:read` | Available integration modules (live shipping rates: the courier platforms list_integrations names) with their settings, plus this store's status, config and which secret keys are set. | none |
@@ -287,6 +293,14 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `describe_secrets` | `settings:read` | How the store's vault works: naming rules, size and count limits, exactly where {{ secrets.name }} may be used, what run logs keep, and what promote_to_live does with secrets. | none |
 | `list_flow_schedule_runs` | `events:read` | Every tick of a flow's schedule, newest first: { runs: [{ id, flowId, ranAt, status: queued \| ok \| failed \| skipped, error }] }. | `{ id: string, limit?: integer }` |
 
+## Tracked links
+
+| Tool | Scope | What it does | Input |
+| --- | --- | --- | --- |
+| `list_tracked_links` | `storefront:read` | The store's tracked links, newest first: { links: [{ id, code, name, targetPath, source, medium, campaign, discountCode, active, createdByKind, createdBy, createdAt, updatedAt, clicks, clicksLast30Days, orders, revenueMinor, url }], total, offset,… | `{ id?: string, code?: string, limit?: integer, offset?: integer }` |
+| `upsert_tracked_link` | `storefront:write` | Make or change one tracked link: { id?, code?, name, targetPath, channel?, source?, medium?, campaign?, discountCode?, active? } → { link }. | `{ id?: string, code?: string, name?: string, targetPath?: string, channel?: enum, source?: string, medium?: string, campaign?: string, discountCode?: string, active?: boolean }` |
+| `delete_tracked_link` | `storefront:write` | Remove one tracked link: { id } or { code } → { deleted, id, code }. | `{ id?: string, code?: string }` |
+
 ## Analytics
 
 | Tool | Scope | What it does | Input |
@@ -294,8 +308,11 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `get_analytics` | `orders:read` | Everything the store knows about a period: { from?, to?, compare? } → { period, currency, revenueMinor, taxCollectedMinor, orders, paidOrders, averageOrderMinor, refundedMinor, abandonedCheckouts, abandonedRate, newCustomers, repeatRate,… | `{ from?: string, to?: string, compare?: boolean }` |
 | `get_top_products` | `orders:read` | What sold most: { period: "7d" \| "30d" \| "90d" \| "365d" } → { period, currency, bestSellers: [{ productId, name, quantity, revenueMinor }], paidOrders, revenueMinor }. | `{ period?: "7d" \| "30d" \| "90d" \| "365d" }` |
 | `export_analytics` | `orders:read` | A period's numbers as CSV text: { period: "7d" \| "30d" \| "90d" \| "365d" } → { format, filename, csv, rows, period, currency }. | `{ period?: "7d" \| "30d" \| "90d" \| "365d", format?: "csv" }` |
-| `import_search_performance` | `settings:write` | Upload search performance rows the owner exported themselves: { rows: [{ day, query, page, clicks, impressions, position }], source? } → { imported: { rows, days, from, to, source } }. | `{ rows: object[], source?: string }` |
-| `get_search_performance` | `orders:read` | What the uploaded search rows say: { from, to, groupBy: "query" \| "page", limit? } → { period, groupBy, rows: [{ key, clicks, impressions, ctr, position }], totals }. | `{ from: string, to: string, groupBy?: "query" \| "page", limit?: integer }` |
+| `import_search_performance` | `settings:write` | Upload search performance rows the owner exported themselves: { rows: [{ day, query, page, clicks, impressions, position, engine?, country?, device? }], source? } → { imported: { rows, days, from, to, source } }. | `{ rows: object[], source?: string }` |
+| `get_search_performance` | `orders:read` | What search performance says for a period: { from, to, groupBy?: "query" \| "page" \| "engine" \| "country" \| "device" \| "day", engine?: "google" \| "bing" \| "other", country?, device?: "desktop" \| "mobile" \| "tablet", limit? } → { period, groupBy,… | `{ from: string, to: string, groupBy?: "query" \| "page" \| "engine" \| "country" \| "device" \| "day", engine?: "google" \| "bing" \| "other", country?: string, device?: "desktop" \| "mobile" \| "tablet", limit?: integer }` |
+| `get_order_sources` | `orders:read` | Where sales came from: channel, source, campaign and tracked link, with orders and sales for a period. | `{ from?: string, to?: string }` |
+| `describe_search_engines` | `settings:read` | Which search engines this store is connected to, read-only: {} → { mode, primaryHostname, engines: [{ engine, available, state, way, hostname, lastReadAt, lastError, readAccess, identities? }], requests: [{ id, engine, hostname, requestedBy,… | none |
+| `connect_search_engine` | `settings:write` | Asks the owner to connect a search engine: { engine: "google" \| "bing" \| "indexnow" } → { request: { id, engine, hostname, state: "waiting_for_owner" }, approveAt, next }. | `{ engine: "google" \| "bing" \| "indexnow" }` |
 
 ## Governance
 
@@ -329,7 +346,7 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | Tool | Scope | What it does | Input |
 | --- | --- | --- | --- |
 | `list_pricing_rules` | `settings:read` | The store's automatic discounts (live data): { rules: [{ id, name, kind, value, conditions, applies, priority, stackable, startsAt, endsAt, enabled, usageCount }] }, in the order they run. | none |
-| `upsert_pricing_rule` | `settings:write` | Creates or replaces one automatic discount on the live store. | `{ id?: string, name: string, kind: "percent" \| "amount" \| "bxgy" \| "free_shipping", value?: integer, conditions?: object, applies?: object, priority?: integer, stackable?: boolean, startsAt?: string, endsAt?: string, enabled?: boolean }` |
+| `upsert_pricing_rule` | `settings:write` | Creates or replaces one automatic discount on the live store. | `{ id?: string, name: string, kind: "percent" \| "amount" \| "bxgy" \| "free_shipping", value?: integer, conditions?: object, applies?: object, priority?: integer, stackable?: boolean, startsAt?: string, endsAt?: string, enabled?: boolean, showOnStorefront?: boolean }` |
 | `delete_pricing_rule` | `settings:write` | Removes one automatic discount from the live store. | `{ id: string }` |
 | `list_checkout_rules` | `settings:read` | The store's shipping and payment rules (live data): { rules: [{ id, name, kind, conditions, target, enabled }] }. | none |
 | `upsert_checkout_rule` | `settings:write` | Creates or replaces one checkout rule on the live store: hide_rate, show_rate_only, hide_payment or pickup. | `{ id?: string, name?: string, kind: "hide_rate" \| "show_rate_only" \| "hide_payment" \| "pickup" \| "local_delivery", conditions?: object, target?: object, enabled?: boolean }` |
@@ -339,7 +356,7 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `set_customer_group` | `customers:write` | Puts one customer in a group, or takes them out with groupHandle null. | `{ customerId: string, groupHandle: string }` |
 | `simulate_checkout` | `settings:read` | Prices a hypothetical cart the way checkout would and reports what the rules do: { currency, lines, subtotalMinor, discountMinor, totalMinor, freeShipping, applied: [{ ruleId, name, amountMinor }], customer, shippingOptions, paymentProvider,… | `{ items: object[], customerEmail?: string, customerId?: string, discountCode?: string, destinationCountry?: string }` |
 
-## Checkout settings, tax and staff notifications
+## Checkout settings, tax, staff notifications and the weekly summary
 
 | Tool | Scope | What it does | Input |
 | --- | --- | --- | --- |
@@ -349,6 +366,8 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `set_notification_settings` | `settings:write` | Replaces the live store's staff notification addresses: who also receives the new-order email and the low-stock email, and whether a morning summary is wanted. | `{ newOrderEmails?: string[], lowStockEmails?: string[] }` |
 | `get_tax_settings` | `settings:read` | Whether the live store charges tax, and how (live data): { tax: { enabled, pricesIncludeTax, defaultTaxCode, shippingTaxCode } }. | none |
 | `set_tax_settings` | `settings:write` | Replaces the live store's tax settings: whether tax is charged, whether prices already include it, and the default product and shipping tax categories. | `{ enabled?: boolean, pricesIncludeTax?: boolean, defaultTaxCode?: string, shippingTaxCode?: string }` |
+| `get_weekly_summary` | `settings:read` | The weekly summary for one week, as the numbers the Monday mail is built from, plus the switch of the person this token acts for: { store: { id, name, timezone, currency, open }, week: { week, from, to, timezone }, previousWeek, currency, current: {… | `{ week?: string }` |
+| `set_weekly_summary` | `settings:write` | Switches the weekly summary mail on or off for the person this token acts for, on this store: { enabled } → { enabled, default, role, canReceive, schedule, timezone, nextSend, lastSend, sandbox }. | `{ enabled: boolean }` |
 
 ## Payments account
 
@@ -372,6 +391,40 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `get_launch_mode` | `settings:read` | Whether the live storefront is open or still private (live data): { access: { access: "open" \| "password" \| "coming_soon", message, hasPassword, updatedAt } }. | none |
 | `set_launch_mode` | `settings:write` | Opens the live store to shoppers, or keeps it private. | `{ access: "open" \| "password" \| "coming_soon", password?: string, message?: string }` |
 
+## Pixels and tracking choice
+
+| Tool | Scope | What it does | Input |
+| --- | --- | --- | --- |
+| `get_pixels` | `settings:read` | The store's advertising and analytics pixels and how shoppers are asked about tracking: {} → { pixels: [{ channel, id, label?, enabled, updatedAt }], consentMode, channels: [{ id, name, idLabel, idExample, idPattern, idHelp, labelLabel?,… | none |
+| `set_pixel` | `settings:write` | Switches on a channel's pixel, or replaces the one it has: { channel, id, label?, enabled? } → the same answer as get_pixels. | `{ channel: enum, id: string, label?: string, enabled?: boolean }` |
+| `remove_pixel` | `settings:write` | Removes a channel's pixel: { channel } → the same answer as get_pixels. | `{ channel: enum }` |
+| `set_consent_mode` | `settings:write` | Chooses which shoppers are asked before pixels load: { consentMode } → the same answer as get_pixels. | `{ consentMode: "off" \| "ask-everywhere" \| "ask-where-required" }` |
+
+## Sections
+
+| Tool | Scope | What it does | Input |
+| --- | --- | --- | --- |
+| `describe_sections` | `storefront:read` | Everything needed to write a section, as data. | `{ parts?: enum[] }` |
+| `list_sections` | `storefront:read` | The sections this store can place: the built-in ones every store has (the theme's hero, collection, more-products and styles, each page's own body, and custom HTML), and the store's own, add-on and catalogue sections with their version, whether you… | `{ origin?: "store" \| "catalogue" \| "app" \| "theme", cursor?: string, limit?: integer }` |
+| `get_section` | `storefront:read` | One section's whole package (settings schema, template, styles, presets), whether you may change it, its kept versions and where it is placed. | `{ id: string, version?: string, part?: "template" \| "styles", offset?: integer }` |
+| `save_section` | `storefront:write` | Creates one of the store's own sections, or saves a new version of it: { package }. | `{ package: object }` |
+| `fork_section` | `storefront:write` | Makes the store's own copy of an add-on, catalogue or store section under a new id: { id, newId, repoint? }. | `{ id: string, newId: string, repoint?: boolean }` |
+| `list_section_versions` | `storefront:read` | The kept versions of one of the store's sections, newest first, with when each was saved, by whom, and which one the draft and the live storefront render. | `{ id: string }` |
+| `rollback_section` | `storefront:write` | Brings back an earlier version of one of the store's sections: { id, version }. | `{ id: string, version: string }` |
+| `delete_section` | `storefront:write` | Deletes one of the store's own (or catalogue) sections with all its versions: { id, force? }. | `{ id: string, force?: boolean }` |
+| `preview_section` | `storefront:read` | Renders one instance of a section with the settings you give, exactly as shoppers would see it, without placing it anywhere: { id, version?, settings?, page? } for a saved or built-in section, or { package, settings?, page? } for one you have not saved yet. | `{ id?: string, version?: string, package?: object, settings?: object, page?: string, sample?: object }` |
+
+## Themes
+
+| Tool | Scope | What it does | Input |
+| --- | --- | --- | --- |
+| `list_themes` | `storefront:read` | Every storefront look a store can wear, one list: { themes: [{ id, name, category, line, pages, preview, phone, licence, current?, demoUrl }], current }. | none |
+| `get_theme` | `storefront:read` | One theme whole: { id } → { theme, preset }: its line, pages, pictures and what it needs, then its colours, typefaces, the sections it brings (summarised), every page's instances with their settings, the placeholder images, menus, starter pages and… | `{ id: string }` |
+| `list_presets` | `storefront:read` | The older name for list_themes, kept working: the same looks by their catalogue ids: { presets: [{ id, name, description, category, version, theme, ofTheme?, typefaces, colours, sections, pages, starterPages, licence }] }. | none |
+| `get_preset` | `storefront:read` | The older name for get_theme, kept working. | `{ id: string }` |
+| `apply_preset` | `storefront:write` | The older way to pick a theme, kept working (set-theme is the one way now; apply_preset adds dryRun and reset). | `{ id: string, dryRun?: boolean, revision?: integer, reset?: boolean }` |
+| `claim_showcase_look` | `storefront:write` | Puts the look of a showcase store from the library (list_themes `library`) on this store: { code } → { claimId, applied }. | `{ code: string }` |
+
 ## Readiness
 
 | Tool | Scope | What it does | Input |
@@ -391,8 +444,8 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 
 | Tool | Scope | What it does | Input |
 | --- | --- | --- | --- |
-| `get_feeds` | `settings:read` | Where this store publishes itself for shopping engines and AI agents: { } → { hostname, feeds: { google, csv, json }, llmsTxt, wellKnown, mcp, docs, summary: { items, inStock, outOfStock, backorder, problemCount, ok, checkedAt } }. | none |
-| `check_feed` | `settings:read` | Fetch this store's published product feed and report on it: { } → { ok, hostname, feeds, items, inStock, outOfStock, backorder, problems: [{ id, title, field, message }], problemCount, checkedAt, error? }. | none |
+| `get_feeds` | `settings:read` | Where this store publishes itself for shopping engines and AI agents: { } → { hostname, feeds: { google, csv, json }, channelFeeds: { meta, pinterest, tiktok }, llmsTxt, wellKnown, mcp, docs, summary: { items, inStock, outOfStock, backorder,… | none |
+| `check_feed` | `settings:read` | Fetch this store's published product feed and report on it: { channel?: "google" \| "meta" \| "pinterest" \| "tiktok" } → { ok, hostname, feeds, items, inStock, outOfStock, backorder, problems: [{ id, title, field, message }], problemCount, checkedAt, error? }. | `{ channel?: "google" \| "meta" \| "pinterest" \| "tiktok" }` |
 
 ## Store functions
 
@@ -401,9 +454,9 @@ Every MCP tool the Formahand endpoint serves (252 of them), grouped by the job t
 | `describe_store_functions` | `storefront:write` | The hooks a store function can run at, what each one is handed (`sampleInput`), what it may answer (`sampleOutput`, a worked example that validates against the contract), what the store will refuse to accept back (`clamps`), and what it does when… | none |
 | `list_store_functions` | `storefront:write` |  | none |
 | `get_store_function` | `storefront:write` | One function in full: its source, its versions (newest first, with who uploaded each and when), its counters, its last failures, and, when it is in shadow mode, what it would have done on recent traffic. | `{ name: string, version?: integer }` |
-| `create_store_function` | `storefront:write` | Uploads one ES module as a new version of a store function and leaves it switched off. | `{ name: string, hook: "cart.price" \| "discount.eligibility" \| "shipping.options" \| "payment.methods" \| "checkout.validate" \| "order.event", source: string }` |
+| `create_store_function` | `storefront:write` | Uploads one ES module as a new version of a store function and leaves it switched off. | `{ name: string, hook: enum, source: string, position?: integer }` |
 | `test_store_function` | `storefront:write` | Runs one function once against an input you supply, or a sample input for its hook if you supply none, and returns what it asked for, what the store would actually have applied, every clamp the store had to make, and how long it took. | `{ name: string, input?: object }` |
-| `enable_store_function` | `storefront:write` | Switches one function on. | `{ name: string, mode?: "shadow" \| "on" }` |
+| `enable_store_function` | `storefront:write` | Switches one function on. | `{ name: string, mode?: "shadow" \| "on", position?: integer }` |
 | `disable_store_function` | `storefront:write` | Switches one function off. | `{ name: string }` |
 | `rollback_store_function` | `storefront:write` | Points a function back at one of its earlier versions. | `{ name: string, version: integer }` |
 | `delete_store_function` | `storefront:write` | Removes one function from this environment. | `{ name: string }` |

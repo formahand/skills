@@ -97,6 +97,7 @@ Top-level fields, generated from the manifest schema (`manifest`, `slug`, `name`
 | `emailTemplates` | string[] | no |
 | `functions` | object[] | no |
 | `blocks` | object[] | no |
+| `sections` | any[] | no |
 | `settings` | object[] | no |
 | `schedules` | object[] | no |
 | `limits` | object | no |
@@ -107,19 +108,34 @@ The complete list of what an app can ask for, with the words the merchant reads 
 
 | Grant | The merchant reads | What it means |
 | --- | --- | --- |
-| `products:read` | Read your products | Titles, prices, images, stock and custom fields, through your store's own API. It sees what a shopper's browser could already see, plus your costs and your drafts. |
-| `products:write` | Change your products | Create and edit products, variants and custom fields. Every change is recorded against the app, so you can see which of them it made. |
-| `orders:read` | Read your orders (personal data) | Order numbers, lines, totals, status and tags. On its own it does not carry the buyer: without “Read your customers” the app sees each order's customer as an id it cannot resolve, plus the country, and no email address, phone number or street. It is still shown here and never ticked for you, because an order is about a person even when their name is not on it. |
-| `orders:write` | Change your orders | Add notes and tags, and move an order through its status. It can never write money or stock directly: those go through the same paths the dashboard uses. |
-| `orders:refund` | Refund an order | Ask your store to refund an order, which moves money. Your store issues the refund, writes the ledger line and mails the shopper; the app only decides that it should happen. Tick this one deliberately. |
-| `gift_cards:issue` | Issue gift cards | Let the app make gift cards for your shop. A gift card is money: whatever goes on one, your shop owes until somebody spends it. The app is held to the same money limits your agents are, every card says which app made it, and all of them are on your gift card list where you can stop any of them. Tick this one deliberately. |
-| `settings:read` | Read your store profile | Your store's name, legal name, postal address, contact address, timezone and weight unit, the profile, and nothing else on your settings. Not your plan, not your automations, not your subscriptions, not your email templates, and never a key or anything on your payment profile. Each of those would be its own line on this screen if an app could ask for it. |
-| `customers:read` | Read your customers, personal data | Names, email addresses, phone numbers, addresses and order history, and, beside “Read your orders”, the buyer in full on every order the app reads. This is the one grant on this screen that hands an app real personal data about real people, and it is the one thing here that can leave your store if the app is allowed to call out. It is never ticked for you. |
-| `email:send_template` | Send one of your own emails | Send one of your own email templates, in your voice, from your verified address, with wording you edit in Automations. The app names a template you own and the values it fills in; it can never write a sentence a shopper reads. It goes to the buyer on an order it names, to you, or to somebody who gave the app their address through one of its own forms and confirmed it, and every send is counted on your own email allowance and against a daily budget for that app. |
+| `products:read` | Read your products | Titles, prices, images, stock and custom fields, including your costs and the drafts shoppers cannot see. |
+| `products:write` | Change your products | Create and edit products, variants and custom fields, with every change recorded against the app. |
+| `orders:read` | Read your orders (personal data) | Order lines, totals, status and tags, with the buyer as an id and a country; tick this one deliberately, as an order is about a person. |
+| `orders:write` | Change your orders | Add notes and tags and move an order through its status, never changing money or stock directly. |
+| `orders:refund` | Refund an order | Ask your store to refund an order, which moves money back to the buyer; tick this one deliberately. |
+| `gift_cards:issue` | Issue gift cards | Make gift cards your shop owes until they are spent, within your agents' money limits; tick this one deliberately. |
+| `discounts:issue` | Make one-off discount codes | Make single-use codes from a template discount, never worth more than it and at most 500 a day; tick this one deliberately. |
+| `settings:read` | Read your store profile | Your store's name, legal name, addresses and timezone, and not your plan, automations, templates or keys. |
+| `settings:read_all` | Read all your settings | Everything an agent may read in settings, from shipping to email templates and your plan, but never a secret's value. |
+| `settings:write` | Change your settings | Change shipping, discounts, rules, integrations, automations, webhooks and email templates; tick this one deliberately. |
+| `customers:read` | Read your customers, personal data | Names, emails, phones, addresses and order history, the one grant that hands an app real personal data; tick this one deliberately. |
+| `customers:write` | Change your customers | Add customers and change their tags, notes, custom fields and groups, without reading who they are. |
+| `customers:export` | Download your customer list, personal data | Download every customer in one file, with names, emails, phones and addresses; tick this one deliberately. |
+| `email:send_template` | Send one of your own emails | Send one of your own email templates, with your wording, to an order's buyer, to you or to a confirmed sign-up. |
+| `marketing:send` | Send email campaigns | Send campaigns to your newsletter subscribers from your own address, in your name; tick this one deliberately. |
+| `events:read` | Read your store's event log, personal data | Every change in your store, where order events carry the buyer's email and address; tick this one deliberately. |
+| `storefront:read` | Read your storefront draft | Your storefront draft, with theme settings, sections, pages and menus, including what you have not published. |
+| `storefront:write` | Edit your storefront draft | Change your storefront draft and save sections and functions of its own, which reach shoppers only when you publish. |
+| `storefront:publish` | Publish your storefront | Put the draft live so shoppers see it, whoever made the changes; tick this one deliberately. |
+| `domains:read` | Read your domains | Your store's addresses and the DNS records each one needs, and nothing about your email or account. |
+| `domains:write` | Change your domains | Add, check and remove domains and pick the primary one shoppers are sent to; tick this one deliberately. |
+| `payments:write` | Change your payment features and move your balance | Switch payment features and send your balance to your bank, within your agents' limits; tick this one deliberately. |
 | `webhooks:call` | Trigger one of your own event subscriptions | Not available yet. |
-| `storage:db` | Keep its own records | The app gets its own tables, with your store's app allowance behind them. These are the app's records, not your store's: an order is never written here. |
-| `storage:files` | Keep its own files | The app gets its own place to put files, such as review photos or return labels, under your store's app file allowance. |
-| `schedule:cron` | Run on a timer you set | Wake the app every so often with no shopper waiting, to send a weekly digest, to tidy up, to check something. It runs at most every fifteen minutes, each run counts as one visit on your function allowance, and you can see the last run, switch a timer off or run one now from this screen. An app woken this way gets a little longer to think, which is why this line also raises what it may spend on its own pages. |
+| `storage:db` | Keep its own records | Its own tables under your app allowance, holding the app's records, not your store's, so never an order. |
+| `storage:files` | Keep its own files | Its own place for files, such as review photos or return labels, under your app file allowance. |
+| `schedule:cron` | Run on a timer you set | Wake the app at most every 15 minutes with no shopper waiting, each run counting as one function visit. |
+| `shopper:identify` | Know which signed-in shopper is using it (personal data) | Tell the app a fixed id for each signed-in shopper, so it recognises them on every visit; tick this one deliberately. |
+| `shopper:email` | Know the signed-in shopper's email address, personal data | Tell the app the signed-in shopper's email address, which needs the id grant too; tick this one deliberately. |
 
 ## Store functions an app brings with it
 
@@ -135,7 +151,7 @@ So an app may carry store functions in its manifest, source and all, and install
 
 Three things about that, and the first is the one that matters:
 
-**They arrive switched off.** Installing an app never puts code on your cart, your checkout or your orders. The function appears on **Online Store → Apps & functions** beside the ones you wrote yourself, off, and you switch it on there, and on your live store only you or an admin can, never a token. That is the same line every function is held to, and it is why bringing one costs no line on the install screen: an app that brings a function has not been granted anything, it has offered you something to turn on.
+**They arrive switched off.** Installing an app never puts code on your cart, your checkout or your orders. Several functions may sit on one hook: an app's run after your own by default (position 100), and you can reorder them. The function appears on **Online Store → Apps & functions** beside the ones you wrote yourself, off, and you switch it on there, and on your live store only you or an admin can, never a token. That is the same line every function is held to, and it is why bringing one costs no line on the install screen: an app that brings a function has not been granted anything, it has offered you something to turn on.
 
 **They run as your store, not as the app.** A function is handed its input by Formahand and answers with actions, a tag, a note, one of your own email templates, one of your own event subscriptions. It never holds the app's token, never sees the app's records, and can name nothing you do not already own. An app with no grants at all can still bring one, and a grant you untick changes nothing about it.
 

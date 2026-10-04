@@ -12,7 +12,7 @@
     {
       "name": "formahand",
       "source": "./",
-      "description": "Work with a Formahand store: storefront design, products, orders, shipping, payments readiness, apps, store functions, integrations, events, environments and money rules."
+      "description": "Work with a Formahand store and build reference-inspired, merchant-editable storefront themes."
     }
   ]
 }

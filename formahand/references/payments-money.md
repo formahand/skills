@@ -14,7 +14,7 @@ Minting or revoking tokens, changing team members, accepting terms, payment onbo
 
 ## Payments
 
-One active processor per store and per environment: Formahand Payments (card payments; the merchant finishes payouts on a form embedded in the dashboard), PayPal (their own REST app keys) or manual (bank transfer / cash on delivery). `get_started` reports whether payments are ready; an agent cannot complete onboarding or enter card details. `get_payout_profile` → `set_payout_profile` fills that form ahead (what the store sells, its website, charge timing, support contact) so it opens asking only for identity, bank and terms; `leftover` is what stays with the merchant. Discounts (`upsert_discount`) need a ready Formahand Payments account because the codes are validated at checkout.
+One active processor per store and environment: Formahand Payments (card payments; the merchant finishes payouts at `/dashboard#settings/payments/setup`), PayPal (their own REST app keys) or manual (bank transfer / cash on delivery). `get_started` reports whether payments are ready; an agent cannot complete onboarding or enter card details. `get_payout_profile` → `set_payout_profile` fills that form ahead so it opens asking only for identity, bank and terms; `leftover` stays with the merchant. Discounts need a ready Formahand Payments account. Shoppers abroad can pay in their own currency (`local_currencies` payment feature, off by default); prices stay in the store currency.
 
 ## Card payments by country
 
@@ -57,7 +57,7 @@ A wall is the structured refusal a feature returns until the store meets its con
 
 ```json
 { "error": "…", "wall": true, "feature": "customDomains", "reason": "setup", "plan": "free", "requiredPlan": "growth",
-  "steps": [{ "id": "card", "label": "Add a card for $2.00/month per extra domain", "done": false, "href": "/dashboard#integrations" }],
+  "steps": [{ "id": "card", "label": "Switch on extra domains ($2.00/month each, on your statement)", "done": false, "href": "/dashboard#activate/domains?option=extra", "activateHref": "/dashboard#activate/domains?option=extra" }],
   "usage": { "used": 3, "limit": 3 } }
 ```
 
@@ -87,7 +87,7 @@ Getting paid is the one part of a store an agent cannot finish. Identity, bank a
 
 Where a payout account already exists the answers are sent to it at once, so the form opens shorter; where none exists they are sent the moment the merchant opens one. Neither tool completes onboarding and neither switches the store's active processor.
 
-Read the `warnings` back to the merchant rather than swallowing them, a storefront still showing "Coming soon" is the common one, because the website on the account is reviewed and a site under construction is usually refused; open the store first, or choose `websiteMode: "none"` and write a description that stands on its own. Then hand over: the answer's `handoff.href` is `/dashboard#settings/payments`, and only the merchant can finish there. `describe_readiness { feature: "checkout" }` carries the same thing as the `payout_profile` requirement, severity `recommended`.
+Read the `warnings` back to the merchant rather than swallowing them, a storefront still showing "Coming soon" is the common one, because the website on the account is reviewed and a site under construction is usually refused; open the store first, or choose `websiteMode: "none"` and write a description that stands on its own. Then hand over: the answer's `handoff.href` is `/dashboard#settings/payments/setup`, and only the merchant can finish there. `describe_readiness { feature: "checkout" }` carries the same thing as the `payout_profile` requirement, severity `recommended`.
 
 ## Payments: the switches on the account
 
@@ -104,7 +104,7 @@ The payout profile is what an agent prepares *before* money moves. This is what 
 | --- | --- | --- |
 | `automatic_tax` | none | Orders are taxed where the merchant is registered, at 0.5% of each order. Registrations are theirs to add, and without one the order is taxed at nothing. |
 | `strong_authentication` | `authentication` (`always`, `over`, `provider`), `authenticationOverMinor` | Buyers are asked to confirm with their bank more often. No extra cost; fewer disputes, and a few buyers who give up at the bank's screen. |
-| `local_currencies` | none | A buyer abroad sees the total in their own currency. Nothing extra for the merchant; the buyer's converted price carries the conversion charge. |
+| `local_currencies` | none | Shoppers abroad pay in their own currency. Off until the merchant turns it on. Prices stay in the store's one currency and the storefront and cart show that currency; only the payment page converts, and the merchant is still paid in their own currency. Nothing extra for the merchant; the buyer's converted price carries the conversion charge. |
 | `instant_payouts` | `payoutInterval` (`daily`, `weekly`, `monthly`, `manual`) | The schedule *is* the switch: `manual` keeps the balance until the merchant asks, which is what makes an instant payout worth having. |
 | `payment_methods` | `method` (an id from `describe_payment_features`) | One way to pay on or off. Pay-later methods cost noticeably more per order and the rate is on the row. |
 | `fraud_controls`, `chargeback_protection` | none | Refused: the provider decides these. Report the `state` and the `blockers`. |
@@ -160,6 +160,8 @@ Tax also reaches the numbers an agent reads: `get_analytics` reports `revenueMin
 | `set_notification_settings` | `settings:write` | Replaces the live store's staff notification addresses: who also receives the new-order email and the low-stock email, and whether a morning summary is wanted. |
 | `get_tax_settings` | `settings:read` | Whether the live store charges tax, and how (live data): { tax: { enabled, pricesIncludeTax, defaultTaxCode, shippingTaxCode } }. |
 | `set_tax_settings` | `settings:write` | Replaces the live store's tax settings: whether tax is charged, whether prices already include it, and the default product and shipping tax categories. |
+| `get_weekly_summary` | `settings:read` | The weekly summary for one week, as the numbers the Monday mail is built from, plus the switch of the person this token acts for: { store: { id, name, timezone, currency, open }, week: { week, from, to, timezone }, previousWeek, currency, current: {… |
+| `set_weekly_summary` | `settings:write` | Switches the weekly summary mail on or off for the person this token acts for, on this store: { enabled } → { enabled, default, role, canReceive, schedule, timezone, nextSend, lastSend, sandbox }. |
 | `get_plan` | `settings:read` | The store's plan, effective pricing and billing: { plan: { plan: free \| growth \| pro, subscribedPlan, status, entitlements: { stores, customDomains, marketing, flows, apiTokens, teamSeats, transactionFeeBps, shippingMarkupBps,… |
 | `get_statement` | `settings:read` | A monthly statement (/docs/billing §5): { period? } (YYYY-MM, default this month) → { statement: { id, period, currency, lines: [{ kind: plan \| email_overage \| extra_domains \| media_overage \| label, description, quantity, unitMinor, amountMinor,… |
 | `apply_promo_code` | `settings:write` | Apply a promotion code to this store: { code } → { promotion: { code, kind: fee_bps \| markup_bps \| plan_discount_pct \| email_overage \| domain_price \| fee_holiday, value, expiresAt }, pricing } (the new effective pricing, as get_plan.pricing). |

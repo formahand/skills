@@ -22,7 +22,7 @@ What each kind of refusal means and the next step. The rule in every case: read 
 `apply_storefront_commands` applies a batch whole or not at all. A refusal names the command that failed:
 
 ```json
-{ "error": "Command 3 (set-section-visibility, collection): the collection section is the home page's product grid and must stay visible",
+{ "error": "Command 3 (set-section-visibility, collection): the home page has to show something",
   "reason": "…", "position": 2, "command": { "index": 3, "type": "set-section-visibility", "target": "collection" } }
 ```
 
@@ -36,7 +36,7 @@ A refused action returns a wall body `{ wall: true, feature, reason, plan, requi
 
 A tool called with no arguments answers at most about 24 KB. Tools with more to say take an argument to ask for it:
 
-- Lists page with `cursor` (or `before`): pass back the previous answer's `nextCursor` until it is empty. Paged tools: `list_products`, `list_orders`, `list_events`, `list_customers`, `list_returns`, `list_media`.
+- Lists page with `cursor` (or `before`): pass back the previous answer's `nextCursor` until it is empty. Paged tools: `list_products`, `list_orders`, `list_events`, `list_customers`, `list_returns`, `list_sections`, `list_media`.
 - Some tools answer an overview and take `sections` or `fields` for the rest: `describe_flows`, `list_email_templates`, `describe_system`. Ask for the one part you need rather than `"all"`.
 - `list_modules` gives one line per module; pass `{ id }` for one module's full settings schema.
 - For a whole catalog, customer list or order history, use the export tools (`export_products`, `export_customers`, `export_orders`) rather than paging by hand.

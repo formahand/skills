@@ -31,7 +31,8 @@ Copied, idempotently (products by slug, collections by handle, pages by slug, te
 
 | Resource | Promote (sandbox → live) | Refresh (live → sandbox) |
 | --- | --- | --- |
-| Storefront draft: theme settings, sections, module settings, hero image, navigation, content pages | becomes a **new live draft revision**; publishing stays explicit (Online Store → Publish, or `publish_storefront`) | imported and **published** so the sandbox mirrors the live storefront |
+| Storefront draft (schema version 3): theme settings, section instances with the version each is pinned at, module settings, hero image, navigation, content pages | becomes a **new live draft revision**; publishing stays explicit (Online Store → Publish, or `publish_storefront`) | imported and **published** so the sandbox mirrors the live storefront |
+| Sections: the store's own, catalogue and add-on sections, every kept version | copied before the draft, so every pin finds its version; a version live already has is left as it is (versions never change, and a live page may render it) | same, except a version the sandbox holds with different content is overwritten from live |
 | Products with variants and images | created or updated live; images are copied into the target environment's media library and URLs rewritten to its address | same |
 | Collections (members mapped through product slugs), pages, navigation, SEO | live immediately | same |
 | Shipping settings and rates; the shipping mode when it is `self` or `formahand` | live immediately (a courier platform mode is noted, not switched: its credentials belong to the target) | same |
@@ -40,7 +41,7 @@ Copied, idempotently (products by slug, collections by handle, pages by slug, te
 | Flows | created or updated **disabled**; webhook secrets and agent bearers do not travel (a note names the flow) | same |
 | Integration configs | config only, never secrets | same |
 
-Never copied: orders, customers, events, deliveries, event subscriptions (their endpoints differ per environment), shipping labels, usage, statements, tokens, domains, payment accounts. `dryRun: true` returns the same summary without writing. A resource the target refuses (a reserved variant, a bad handle) is listed under `conflicts`; the rest still lands.
+Never copied: orders, customers, events, deliveries, event subscriptions (their endpoints differ per environment), shipping labels, usage, statements, tokens, domains, payment accounts. `dryRun: true` returns the same summary without writing; `sections.items` lists each section and the versions that would move. A resource the target refuses (a reserved variant, a bad handle) is listed under `conflicts`; the rest still lands.
 
 ## Agent walkthrough
 

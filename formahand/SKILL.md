@@ -46,6 +46,7 @@ A token carries scopes. A tool the token lacks the scope for answers an error na
 | `orders:write` | Fulfill and edit orders |
 | `orders:refund` | Refund orders, within the agent limits |
 | `gift_cards:issue` | Issue and adjust gift cards (store credit is money) |
+| `discounts:issue` | Make single-use codes from a template discount |
 | `settings:read` | Read shipping, discounts, integrations and event subscriptions |
 | `settings:write` | Change shipping, discounts, integrations and event subscriptions |
 | `events:read` | Read the store event log |
@@ -62,7 +63,7 @@ A token carries scopes. A tool the token lacks the scope for answers an error na
 
 ### What a store is
 
-One merchant store = one separate store with its own data and media library, one or more hostnames, one payment account, one plan. `get_store` names it (id, hostnames, runtime status, theme preset, live version, `mode`). Everything a token can do the dashboard can do; there is no separate agent data path.
+One merchant store = one separate store with its own data and media library, one or more hostnames, one payment account, one plan. `get_store` names it (id, hostnames, runtime status, `theme`, live version, `mode`). Everything a token can do the dashboard can do; there is no separate agent data path.
 
 Every write is validated by the store and recorded in the event log (`list_events`).
 
@@ -76,9 +77,13 @@ A token acts on exactly one environment, fixed by its prefix: a live token (`fh_
 
 ### Draft → publish
 
-Storefront appearance and copy (theme settings, sections, modules, hero image, navigation, pages) live in a revision-checked draft: `get_storefront_draft` → `apply_storefront_commands` / `set_hero_image` / `set_navigation` / `set_content_pages` with that `revision` (discover commands with `list_modules`) → `publish_storefront { revision }`. Nothing shoppers see changes until publish; a stale revision is a conflict, re-read and retry.
+Storefront appearance and copy (theme, sections, menus, pages) live in a revision-checked draft: `get_storefront_draft` → `apply_storefront_commands` (listed by `list_modules`) / `set_hero_image` / `set_navigation` / `set_content_pages` with that `revision` → `publish_storefront { revision }`. Shoppers see nothing before publish; a stale revision conflicts: re-read, retry. Pick a look: `list_themes`, then `set-theme { presetId }`.
 
-Everything else, products, collections, images, SEO, shipping, discounts, integrations, subscriptions, flows, templates, changes the store the moment the tool returns.
+Sections (`describe_sections` → `save_section`): put `data-fh-el="<setting key>"` on every element printing a text, image or link setting and `data-fh-group` on reorderable flex or grid containers, or saving is refused (`element_unmarked`); merchants then edit each element in the builder. One element: `update-section` for text, `set-element-style { instanceId, key, align, size, visible, spacing, order, offsetX, offsetY, width, height, layer, mobile, tablet }`, `set-element-order { instanceId, group, order }`; theme sections take `areaId`. Custom blocks are not editable inside.
+
+Rebuilding a site ("make it look like this"): read `get_custom_code` (`allowed.recreate`, `allowed.motion`), start from `set-theme { presetId: "blank-canvas" }`, build each band as a section, `remove-section` replaced theme sections.
+
+Everything else (catalog, images, SEO, shipping, discounts, flows) is live at once.
 
 ### Before you act: readiness
 
@@ -123,13 +128,13 @@ Details: references/payments-money.md.
 
 ## Designing the storefront
 
-Before you change how the storefront looks, call get_custom_code and read `allowed`: the HTML and CSS the store keeps, the theme's colour and font tokens and keyframes, and the editor rules. If you have a design skill, load it first (in Claude Code: /frontend-design:frontend-design; in Codex, the design skill you have installed); otherwise follow https://formahand.com/docs/custom-code. Preview with get_preview_link before you publish, check the page at phone width (about 390px) as well as desktop, and honour prefers-reduced-motion.
+Before changing a storefront, inspect the reference across desktop/mobile and relevant interaction/visitor states; record what was observed, inferred or remains unknown. Check rendered dependencies when possible and do not claim hidden states from one visit. Then call get_custom_code and read `allowed`, plus describe_sections, to verify the current save/render contract. Rebuild the visual intent with authorized merchant assets and truthful store data; make gaps and substitutions visible. Use set-theme { presetId: "blank-canvas" } and one editable section per band where appropriate, marking settings with data-fh-el and reorderable groups with data-fh-group. CSS handles presentation; agent interactions use separate `behavior`, subject to the owner/admin Scripts in sections switch and its inert builder preview. Use the current media and font upload paths from the skill references. Compare the draft at matching viewports/states, test real store flows in scope, and report captured, implemented, locally verified, store-verified and published as distinct statuses. Preview does not authorize publish; honor prefers-reduced-motion.
 
 The loop:
 
 1. `get_custom_code` and read `allowed` (the rulebook below, in full) and `revision`.
 2. `get_storefront_draft` for the current document and `revision`; `list_modules` for the commands and module settings.
-3. Make the change: `apply_storefront_commands` (atomic batches), `set_hero_image`, `set_logo`, `set_navigation`, `set_content_pages`, and for your own code `set_theme_css`, `set_custom_block` or `set_script_embeds`. Every write returns the next `revision`; use it for the next call.
+3. Make the change: `apply_storefront_commands` (atomic batches), `set_hero_image`, `set_logo`, `set_navigation`, `set_content_pages`, and for your own code `save_section` (anything the merchant should edit later), `set_theme_css`, `set_custom_block` (one-off markup nobody edits inside) or `set_script_embeds`. Every write returns the next `revision`; use it for the next call.
 4. `get_preview_link` and open the `draft` link: check desktop and phone width (about 390px), with and without reduced motion.
 5. `publish_storefront { revision }`. If something went wrong, `list_storefront_versions` and `restore_storefront_version` bring an earlier version back.
 
@@ -139,39 +144,68 @@ What your HTML and CSS keep:
 - A block runs no JavaScript. For analytics or chat, switch on a provider with set_script_embeds.
 - Any other element loses its tags and keeps its text. Comments, on* handlers and the style attribute are removed.
 - CSS at-rules kept: `@media`, `@supports`, `@starting-style`, `@keyframes`, `@property`, `@font-face`; removed: `@import`, `@charset`, `@namespace`, `@layer`, `@container`, `@page`, `@font-feature-values`, `@counter-style`, any other at-rule.
-- Also removed inside rules: position: fixed (a fixed layer can cover the checkout button); url() that is neither https nor a path under your store's own /media/.
+- Also removed inside rules: position: fixed, and any position that is not a plain word such as var() (a fixed layer can cover the checkout button); url() that is neither https nor a path under your store's own /media/.
 - Every selector in the theme stylesheet is published under [data-fh-storefront], the storefront's own <body>. :root, html and body mean that element, so page-wide colours and fonts go there.
 - Every selector in a block's CSS is prefixed with that block's own class, so it only reaches inside the block. :scope or & means the block itself.
 - Honour reduced motion: put animations inside @media (prefers-reduced-motion: no-preference), or switch them off under prefers-reduced-motion: reduce.
 - Build on the theme tokens so the merchant's palette follows: `--fh-background`, `--fh-foreground`, `--fh-accent`, `--fh-on-accent`, `--fh-muted`, `--fh-border` and `--fh-font-heading`, `--fh-font-body`.
 
+Sections the merchant can edit (the full rules, an example and the commands are in references/sections.md under "Make it editable"):
+
+- In the builder a merchant selects one element inside a section and types into its text, or aligns, resizes, hides, reorders or nudges it, on desktop and on phones. They can only select what the template marks. Define the marks correctly and the merchant can change your section's words and positions without you; leave them out and the section can only be moved as a whole.
+- Put data-fh-el="<setting key>" on the element that prints each text, textarea, rich text, image, link or url setting: the h2 that prints settings.heading, the img that shows settings.image, the a that uses settings.ctaLink. The mark's own attributes count as inside it, so alt="{{ settings.imageAlt }}" on a marked img and href on a marked a need nothing more.
+- A button or link whose label is a setting of another name, or a card that moves as one, is declared in schema.elements { key, label, type: text | richtext | image | button | link | group, setting?, style?, group? } and marked with data-fh-el="<key>".
+- Put data-fh-group="<key>" on a container whose marked direct children the merchant may reorder, and make that container display:flex or display:grid in the styles; order then moves them. A group that is neither gets a note, because reordering would move nothing.
+- A mark is a fixed key, never an expression, and names a setting or a declared element; anything else is refused with its template line (element_unknown, element_invalid). At most 40 elements per section.
+- save_section refuses a new package that prints a text, image or link setting only outside marked elements: elements_unmarked when nothing is marked, and element_unmarked for each setting, with the line of its first print. Sections already saved keep working, and rollback_section, fork_section and copies between environments are not held to it.
+- The one way out, written on purpose: list the setting in schema.fieldOnly (for example fieldOnly: ["imageAlt"] when the text is only ever an attribute of an unmarked element). The merchant still edits it in the section's fields; it just cannot be selected on the page.
+
 Editor rules:
 
-- The home page has four sections, each exactly once: hero, collection, more-products, styles. Reorder them with move-section (index 0 to 3; blocks keep their places) or set-layout.
+- The theme's home sections (hero, collection, more-products, styles) appear at most once each. Hide one with set-section-visibility, take it off the page with remove-section, and put a removed one back with add-section { sectionId }. The home page has to show at least one visible section or block. Reorder with move-section (index among the page's sections; blocks keep their places) or set-layout.
 - Every page is one ordered list of sections and custom blocks (the draft's document.layout): "home", "catalog", "product" and "page:<content page slug>", whose one section is its own body, "main". Place a block with position { placement: "before" | "after", target: a section id, a block id, "start" or "end", page?, slot? } on add-custom-block, move-custom-block or update-custom-block; reorder a whole page with set-layout { page, order }, which lists every section once and every block that should be there.
 - The header.top slot (under the announcement bar, above the navigation) and the footer.top slot (above the footer) hold blocks too, on every page but the payment page: position { target: "start", slot: "header.top" }.
 - sectionId without position still means right after that section and after the blocks already there, so blocks added one by one stay in the order they were sent. A block beside a hidden section keeps rendering.
 - A block target that is not on the storefront, a section on the wrong page, or a set-layout that leaves out a block on that page is refused, naming the command.
-- The collection section (the home page's product grid) must stay visible; the others can be hidden with set-section-visibility. To make it quieter, restyle it with set_theme_css or hide elements inside it with set-element-style.
-- Hiding a section that is already hidden, or showing one already shown, changes nothing and is not an error.
+- Take a theme section you are replacing off the page with remove-section (or hide it with set-section-visibility { sectionId, visible: false }), never with display:none in CSS: the builder does not apply the theme stylesheet, so a section hidden only by CSS shows up in the merchant's editor next to your design.
+- One element of a placed section: update-section { instanceId, settings } for its text, set-element-style { instanceId, key, align, size, visible, spacing, order, offsetX, offsetY, width, height, layer, mobile, tablet } for its look, place and layer (any marked element; place per device), set-element-order { instanceId, group, order } for a group. Theme sections take areaId instead of instanceId.
+- Hiding a hidden section, or showing a shown one, changes nothing and is not an error.
 - At most 30 commands per apply_storefront_commands call. A batch applies whole or not at all, and a refusal names the command's position, type and target.
 - At most 40 custom blocks per store.
 - Text colours must stay readable on the background; set-colors refuses a pair that is too close.
 - A logo or favicon is one of the store's own uploads; set_logo and set_favicon upload for you.
 
-Editor commands (`apply_storefront_commands`): `set-copy`, `set-colors`, `set-logo`, `set-favicon`, `set-fonts`, `set-social`, `set-badges`, `set-theme`, `set-section-visibility`, `move-section`, `set-section-content`, `set-hero-image`, `set-area-content`, `set-navigation`, `set-content-pages`, `set-module-settings`, `set-element`, `set-element-style`, `add-custom-block`, `update-custom-block`, `remove-custom-block`, `set-theme-css`, `set-script-embeds`, `move-custom-block`, `set-layout`. Fields for each are in references/storefront.md; `list_modules` answers the live schema.
+Recreating a reference site ("make it look like this one"), in order:
+
+1. Explore before building. Inspect desktop and phone layouts plus relevant states: delayed overlays, hover and keyboard menus, search, product options, quick add, cart, newsletter success/error and returning visits. Record URL, viewport, locale, elapsed time and visitor/consent conditions for each observation. Mark findings observed, inferred or unknown; one visit cannot establish hidden campaigns or A/B variants.
+2. Follow dependencies when browser access permits: inspect rendered structure, computed styles, fonts, media and relevant script/app requests to distinguish theme behavior from app and commerce-backend behavior. Never capture or retain credentials, personal buyer data or unrelated network payloads. If access is unavailable, say so rather than inventing evidence.
+3. Verify representative platform features through the actual save-and-render path before promising them. Documentation establishes a contract, not a complete shopper flow.
+4. Preserve presentation, not someone else's protected implementation: reproduce layout, rhythm, type scale, colors and interaction intent using assets the merchant owns or is licensed to use. Do not copy source code, logos, product names, photography, reviews, ratings or claims without authorization. Use real merchant products and truthful copy; make every substitution explicit.
+5. Start from nothing: set-theme { presetId: "blank-canvas" } takes the theme's home sections off the page and places starter sections that become the store's own (hero, product grid, text and image, questions, newsletter, header, footer). Change or replace them; they are ordinary sections.
+6. Pick the closest theme and font pairing (list_themes, set-theme, set-fonts), then set-colors, the merchant's logo and navigation. Use an available open font by exact family name, or ask the signed-in owner to upload a properly licensed WOFF2 face; do not assume arbitrary remote font hosting is allowed.
+7. Build every visual band as a section with save_section, never as a raw custom block: read describe_sections { parts: ["editable"] }, then mark each element that prints a text, image or link setting with data-fh-el and each reorderable flex or grid container with data-fh-group. The save refuses a section whose words the merchant could not select, and its answer lists what the builder can select. Put words and pictures in settings, never in the template.
+8. Take theme sections you replace off the page with remove-section (add-section brings one back); set-section-visibility only hides one for now. Never hide or move a theme section with CSS: the builder does not apply the theme stylesheet to theme sections, so it would show the old section beside the new design.
+9. Read get_custom_code `allowed` and describe_sections before implementation. Section templates support self-hosted video and responsive picture sources; video autoplay must follow the documented muted/loop/poster and reduced-motion rules. CSS handles presentation; agent-authored interactions belong in separate `behavior`, not legacy same-origin `script`.
+10. Put each section's layout and motion in its own styles, built on the theme tokens (--fh-accent, --fh-foreground, --fh-font-heading), so it follows the merchant's colours; keep the theme stylesheet for page-wide things. A section that shows products reads a collection setting, so it follows the catalog.
+11. For each advanced interaction, check the current `behavior` bridge contract and the store's Scripts in sections setting. Behaviors run only after the owner/admin enables it; builder editing previews are inert. Provide a useful no-behavior fallback, and never promise scratch reveals, campaign targeting or external widgets without a real implementation/integration.
+12. Compare local preview and reference at identical viewports and observed states. Test keyboard and screen-reader semantics, reduced motion, errors, real product options, search, cart totals and newsletter outcomes as relevant. Track captured, implemented, locally verified, store-verified and published separately; list unknowns and gaps. Preview is not publication, and this playbook does not authorize publishing.
+
+Motion needs no JavaScript: scrolling marquee or ticker; reveal as the shopper scrolls; entrance on page load, one item after another; hover and press feedback; accordion or faq that opens and closes; carousel the shopper swipes; floating or spinning decoration; sticky bar or heading. The CSS for each is in references/storefront.md under "Motion without JavaScript" and in `get_custom_code` under `allowed.motion`.
+
+Editor commands (`apply_storefront_commands`): `set-copy`, `set-colors`, `set-logo`, `set-favicon`, `set-fonts`, `set-social`, `set-badges`, `set-theme`, `set-section-visibility`, `move-section`, `add-section`, `update-section`, `apply-section-preset`, `duplicate-section`, `remove-section`, `set-section-version`, `apply-preset`, `set-section-content`, `set-hero-image`, `set-area-content`, `set-navigation`, `set-content-pages`, `set-module-settings`, `set-element`, `set-element-style`, `set-element-order`, `add-custom-block`, `update-custom-block`, `remove-custom-block`, `set-theme-css`, `set-script-embeds`, `move-custom-block`, `set-layout`. Fields for each are in references/storefront.md; `list_modules` answers the live schema.
 
 ## Where to look
 
 | Task | Read |
 | --- | --- |
 | Look up any tool, its scope and its inputs | [references/tools.md](references/tools.md) |
-| Change how the storefront looks: theme, sections, copy, blocks, custom HTML and CSS, publishing | [references/storefront.md](references/storefront.md) |
+| Change how the storefront looks: a ready-made theme, sections, copy, blocks, custom HTML and CSS, publishing | [references/storefront.md](references/storefront.md) |
 | Products, collections, images, orders, fulfilment, returns, gift cards, customers, campaigns, shipping | [references/commerce.md](references/commerce.md) |
 | Payments readiness, payment features, tax, walls, statements, plan, anything that costs money | [references/payments-money.md](references/payments-money.md) |
 | React to events: subscriptions, webhooks, flows, schedules, inbound URLs, secrets, integrations, recipes | [references/integrations-events.md](references/integrations-events.md) |
+| Build a reusable section: settings, template, styles, presets, versions, add-on sections | [references/sections.md](references/sections.md) |
 | Build an app: manifest, grants, records, blocks, timers | [references/apps.md](references/apps.md) |
-| Custom logic in the cart or checkout: store functions, hooks, testing, going live | [references/store-functions.md](references/store-functions.md) |
+| Custom logic in the cart or checkout, or a feature the platform does not have (free gifts, bundles, personal codes, loyalty): store functions, hooks, testing, going live | [references/store-functions.md](references/store-functions.md) |
 | Sandbox, test and live tokens, promote and refresh, preview links, launch mode, governance | [references/environments.md](references/environments.md) |
 | An error, a refusal, a conflict, a 402/409/429, a long answer or paging | [references/troubleshooting.md](references/troubleshooting.md) |
 
